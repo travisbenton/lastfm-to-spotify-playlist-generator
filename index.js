@@ -7,9 +7,7 @@ var querystring = require('querystring');
 var cookieParser = require('cookie-parser');
 var async = require('async');
 
-var client_id = ''; 
-var client_secret = ''; 
-var redirect_uri = 'http://localhost:8888/callback'; 
+var config = require('./config'); 
 
 /**
  * Generates a random string containing numbers and letters
@@ -43,9 +41,9 @@ app.get('/login', function(req, res) {
   res.redirect('https://accounts.spotify.com/authorize?' +
     querystring.stringify({
       response_type: 'code',
-      client_id,
+      client_id: config.client_id,
       scope,
-      redirect_uri,
+      redirect_uri: config.redirect_uri,
       state
     }));
 });
@@ -70,11 +68,11 @@ app.get('/callback', function(req, res) {
       url: 'https://accounts.spotify.com/api/token',
       form: {
         code,
-        redirect_uri,
+        redirect_uri: config.redirect_uri,
         grant_type: 'authorization_code'
       },
       headers: {
-        'Authorization': 'Basic ' + (new Buffer(client_id + ':' + client_secret).toString('base64'))
+        'Authorization': 'Basic ' + (new Buffer(config.client_id + ':' + config.client_secret).toString('base64'))
       },
       json: true
     };
@@ -125,7 +123,7 @@ app.get('/generate', req => {
 
     request.post(options, (err, res) => {
       if (!err && res.statusCode === 201) {
-        console.log('Song Added!');
+        console.log('Songs Added!');
       } else {
         console.log('/====== Error adding song ======/');
         console.log(err, 'status code: ' + res.statusCode);
@@ -200,11 +198,15 @@ app.get('/generate', req => {
 
         getIds(urls.slice(0, 19));
 
-        // I'm rate limited to 20 requests per min, so this is an awful, terrible
-        // "work around"
+        // I'm rate limited to 20 requests per min, so this is an awful, 
+        // terrible "work around"
         setTimeout(() => {
-          getIds(urls.slice(20, 49));
-        }, 1000 * 65);
+          getIds(urls.slice(20, 39));
+        }, 1000 * 65); // one min (plus 5 seconds just to be sure)
+
+        setTimeout(() => {
+          getIds(urls.slice(40, 49));
+        }, 1000 * 125); // two mins (plus 5 seconds just to be sure)
 
       });
 
