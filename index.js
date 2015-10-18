@@ -7,8 +7,8 @@ var querystring = require('querystring');
 var cookieParser = require('cookie-parser');
 var async = require('async');
 
-var client_id = '30ed07b8875f4f0d99cfeffe1079c8d6'; 
-var client_secret = 'e65256bca6ca499eb7c0a30da78b6cd5'; 
+var client_id = ''; 
+var client_secret = ''; 
 var redirect_uri = 'http://localhost:8888/callback'; 
 
 /**
