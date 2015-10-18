@@ -6,56 +6,41 @@ var request = require('request');
 var querystring = require('querystring');
 var cookieParser = require('cookie-parser');
 var async = require('async');
+var Q = require('q');
 
 var config = require('./config'); 
+var utils = require('./utils');
 
-/**
- * Generates a random string containing numbers and letters
- * @param  {number} length The length of the string
- * @return {string} The generated string
- */
-var generateRandomString = function(length) {
-  var text = '';
-  var possible = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-
-  for (var i = 0; i < length; i++) {
-    text += possible.charAt(Math.floor(Math.random() * possible.length));
-  }
-
-  return text;
-};
-
-var stateKey = 'spotify_auth_state';
 var app = express();
 
 app.use(express.static(__dirname + '/public'))
    .use(cookieParser());
 
-app.get('/login', function(req, res) {
-  var state = generateRandomString(16);
+app.get('/login', (req, res) => {
+  var state = utils.generateRandomString(16);
   var scope = 'playlist-modify-public';
 
-  res.cookie(stateKey, state);
+  res.cookie(config.stateKey, state);
 
   // your application requests authorization
   res.redirect('https://accounts.spotify.com/authorize?' +
     querystring.stringify({
       response_type: 'code',
-      client_id: config.client_id,
+      client_id: config.spotify_client_id,
       scope,
-      redirect_uri: config.redirect_uri,
+      redirect_uri: config.spotify_redirect_uri,
       state
     }));
 });
 
-app.get('/callback', function(req, res) {
+app.get('/callback', (req, res) => {
 
   // your application requests refresh and access tokens
   // after checking the state parameter
 
   var code = req.query.code || null;
   var state = req.query.state || null;
-  var storedState = req.cookies ? req.cookies[stateKey] : null;
+  var storedState = req.cookies ? req.cookies[config.stateKey] : null;
 
   if (state === null || state !== storedState) {
     res.redirect('/#' +
@@ -63,21 +48,21 @@ app.get('/callback', function(req, res) {
         error: 'state_mismatch'
       }));
   } else {
-    res.clearCookie(stateKey);
+    res.clearCookie(config.stateKey);
     var authOptions = {
       url: 'https://accounts.spotify.com/api/token',
       form: {
         code,
-        redirect_uri: config.redirect_uri,
+        redirect_uri: config.spotify_redirect_uri,
         grant_type: 'authorization_code'
       },
       headers: {
-        'Authorization': 'Basic ' + (new Buffer(config.client_id + ':' + config.client_secret).toString('base64'))
+        'Authorization': 'Basic ' + (new Buffer(config.spotify_client_id + ':' + config.spotify_client_secret).toString('base64'))
       },
       json: true
     };
 
-    request.post(authOptions, function(error, response, body) {
+    request.post(authOptions, (error, response, body) => {
       if (!error && response.statusCode === 200) {
 
         var access_token = body.access_token;
@@ -163,12 +148,18 @@ app.get('/generate', req => {
       var $tracks = $('.chartlist-artists');
       var urls = [];
 
-      createPlaylist(userId, access_token, function(playlistId) {
+      createPlaylist(userId, access_token, playlistId => {
         $tracks.each(function() {
-          var artist = $(this).text().trim();
-          var song = $(this).siblings('a').text().trim();
+          var artist = encodeURIComponent($(this).text().trim());
+          var song = encodeURIComponent($(this).siblings('a').text().trim());
+          var key = config.echonest_key;
+          var echoBaseUrl = 'http://developer.echonest.com/api/v4/song/search';
+          
+          // I have to write this url out since it has two params named `bucket`
+          // and querystring doesn't like that.
+          var url = `${echoBaseUrl}?artist=${artist}&title=${song}&api_key=${key}&results=1&bucket=id:spotify&bucket=tracks`;
 
-          urls.push(`http://developer.echonest.com/api/v4/song/search?artist=${encodeURIComponent(artist)}&title=${encodeURIComponent(song)}&api_key=CHG4YB2HXD66YR4KK&results=1&bucket=id:spotify&bucket=tracks`);
+          urls.push(url);
 
         });
 
@@ -179,10 +170,11 @@ app.get('/generate', req => {
             if (!err) {
               res.forEach(track => {
                 var trackInfo = JSON.parse(track.body);
+                var songs = trackInfo.response.songs;
                 var songId;
 
-                if (trackInfo.response.songs && trackInfo.response.songs[0] && trackInfo.response.songs[0].tracks[0]) {
-                  songId = trackInfo.response.songs[0].tracks[0].foreign_id;
+                if (songs.length && songs[0].tracks[0]) {
+                  songId = songs[0].tracks[0].foreign_id;
                   
                   songIds.push(songId);
                   console.log(songId);
